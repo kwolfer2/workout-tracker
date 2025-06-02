@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workout Logger</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+    }
+    form {
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+    }
+    input, button {
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    .user-btn {
+  padding: 0.5rem 1rem;
+  margin: 0.25rem;
+  background-color: #eee;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.user-btn.selected {
+  background-color: #4caf50;
+  color: white;
+  font-weight: bold;
+}
+
+  </style>
+</head>
+<body>
+
+  <h1>Workout Logger</h1>
+  <div id="user-select">
+  <p id="user-message">Select a user:</p>
+  <button class="user-btn" data-user="Kurt">Kurt</button>
+  <button class="user-btn" data-user="Nick">Nick</button>
+  <button class="user-btn" data-user="Tess">Tess</button>
+  <button class="user-btn" data-user="Andy">Andy</button>
+</div>
+
+
+  <form id="workoutForm">
+    <label>
+  Date:
+  <input type="date" name="log_date" id="log_date">
+</label>
+
+    <label>
+      Workout:
+      <input type="text" name="exercise" placeholder="e.g., Bench Press" required>
+    </label>
+    <label>
+      Weight (lbs):
+      <input type="number" name="weight" required>
+    </label>
+    <label>
+      Reps:
+      <input type="number" name="reps" required>
+    </label>
+    <label>
+      Sets:
+      <input type="number" name="sets" required>
+    </label>
+    <button type="submit">Submit</button>
+  </form>
+
+  <p id="status"></p>
+
+  <button type="button" id="viewWorkoutsBtn">View Workouts for Current User and Date</button>
+<div id="workoutTableContainer"></div>
+
+
+  <script>
+
+    document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  document.getElementById('log_date').value = today;
+});
+  let selectedUser = null;
+
+  const userButtons = document.querySelectorAll('.user-btn');
+  const userMessage = document.getElementById('user-message');
+
+  userButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      userButtons.forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedUser = btn.dataset.user;
+      userMessage.textContent = `Submitting workout for ${selectedUser}`;
+    });
+  });
+    document.getElementById('workoutForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+
+  if (!selectedUser) {
+    alert("Please select a user before submitting.");
+    return;
+  }
+
+  const data = {
+    username: selectedUser,
+    log_date: form.log_date.value,
+    exercise: form.exercise.value,
+    weight: parseInt(form.weight.value),
+    reps: parseInt(form.reps.value),
+    sets: parseInt(form.sets.value)
+  };
+
+  try {
+    const response = await fetch('/submit-workout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    const statusEl = document.getElementById('status');
+    if (response.status === 409) {
+      const confirmOverwrite = confirm('Workout already exists for that day. Overwrite?');
+      if (confirmOverwrite) {
+        await fetch('/overwrite-workout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        statusEl.textContent = 'Workout overwritten!';
+      } else {
+        statusEl.textContent = 'Workout not saved.';
+      }
+    } else if (response.ok) {
+      statusEl.textContent = 'Workout submitted successfully!';
+      form.reset();
+    } else {
+      statusEl.textContent = 'Something went wrong. Try again.';
+    }
+  } catch (error) {
+    document.getElementById('status').textContent = 'Error connecting to server.';
+    console.error('Fetch error:', error);
+  }
+});
+document.getElementById('viewWorkoutsBtn').addEventListener('click', async () => {
+  if (!selectedUser) {
+    alert("Please select a user first.");
+    return;
+  }
+
+  const date = document.getElementById('log_date').value;
+  const container = document.getElementById('workoutTableContainer');
+  container.innerHTML = ''; // Clear previous results
+
+  try {
+    const response = await fetch(`/workouts?username=${selectedUser}&log_date=${date}`);
+    const workouts = await response.json();
+
+    if (workouts.length === 0) {
+      container.innerHTML = `<p>No workouts found for ${selectedUser} on ${date}.</p>`;
+      return;
+    }
+
+    // Create table
+    const table = document.createElement('table');
+    table.border = '1';
+    table.style.marginTop = '1rem';
+    const header = table.insertRow();
+    ['Workout', 'Weight (lbs)', 'Reps', 'Sets'].forEach(text => {
+      const th = document.createElement('th');
+      th.textContent = text;
+      header.appendChild(th);
+    });
+
+    // Add rows
+    workouts.forEach(w => {
+      const row = table.insertRow();
+      row.insertCell().textContent = w.exercise;
+      row.insertCell().textContent = w.weight;
+      row.insertCell().textContent = w.reps;
+      row.insertCell().textContent = w.sets;
+    });
+
+    container.appendChild(table);
+  } catch (err) {
+    console.error('Error fetching workouts:', err);
+    container.innerHTML = `<p>Failed to fetch workouts.</p>`;
+  }
+});
+
+
+  </script>
+
+</body>
+</html>
