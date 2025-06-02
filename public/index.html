@@ -138,7 +138,10 @@
       }
     } else if (response.ok) {
       statusEl.textContent = 'Workout submitted successfully!';
-      form.reset();
+      const savedDate = form.log_date.value; // Save selected date
+form.reset();
+form.log_date.value = savedDate;       // Restore date
+
     } else {
       statusEl.textContent = 'Something went wrong. Try again.';
     }
